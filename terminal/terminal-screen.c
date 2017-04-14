@@ -145,8 +145,6 @@ static gchar     *terminal_screen_zoom_font                     (TerminalScreen 
 static void       terminal_screen_urgent_bell                   (TerminalWidget        *widget,
                                                                  TerminalScreen        *screen);
 
-
-
 struct _TerminalScreenClass
 {
   GtkHBoxClass parent_class;
@@ -2426,4 +2424,36 @@ terminal_screen_save_contents (TerminalScreen *screen,
   terminal_return_if_fail (TERMINAL_IS_SCREEN (screen));
   vte_terminal_write_contents_sync (VTE_TERMINAL (screen->terminal),
                                     stream, VTE_WRITE_DEFAULT, NULL, &error);
+}
+
+void
+terminal_screen_set_active_style (TerminalScreen *screen)
+{
+
+  gboolean has_fg;
+  GdkRGBA fg;
+  PangoAttribute *foreground;
+  PangoAttrList  *attrs;
+
+  has_fg = terminal_preferences_get_color (screen->preferences, "color-foreground", &fg);
+  if (has_fg) {
+    foreground = pango_attr_foreground_new ((guint16)(fg.red*65535),
+                                            (guint16)(fg.green*65535),
+                                            (guint16)(fg.blue*65535));
+  } else {
+    foreground = pango_attr_foreground_new ((guint16)(0.7*65535),
+                                            (guint16)(0.7*65535),
+                                            (guint16)(0.7*65535));
+  }
+
+  attrs = pango_attr_list_new ();
+  pango_attr_list_insert (attrs, foreground);
+  gtk_label_set_attributes (GTK_LABEL (screen->tab_label), attrs);
+  pango_attr_list_unref (attrs);
+}
+
+void
+terminal_screen_unset_active_style (TerminalScreen *screen)
+{
+    gtk_label_set_attributes (GTK_LABEL (screen->tab_label), NULL);
 }

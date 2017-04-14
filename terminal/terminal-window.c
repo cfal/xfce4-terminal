@@ -72,32 +72,47 @@ enum
 
 /* CSS for slim notebook tabs style */
 #define NOTEBOOK_NAME PACKAGE_NAME "-notebook"
-const gchar *CSS_SLIM_TABS =
-"#" NOTEBOOK_NAME " tab {\n"
-#if GTK_CHECK_VERSION (3, 20, 0)
-"  min-height: 0;\n"
-#endif
-"  font-weight: normal;\n"
-"  padding: 1px;\n"
-"  margin: 0;\n"
-"}\n"
-"#" NOTEBOOK_NAME " tab button {\n"
-#if GTK_CHECK_VERSION (3, 20, 0)
-"  min-height: 0;\n"
-"  min-width: 0;\n"
-#endif
-"  padding: 1px;\n"
-"  margin: 0;\n"
-"}\n"
-"#" NOTEBOOK_NAME " button {\n"
-#if GTK_CHECK_VERSION (3, 20, 0)
-"  min-height: 0;\n"
-"  min-width: 0;\n"
-#endif
-"  padding: 1px;\n"
-"}\n";
+//const gchar *CSS_SLIM_TABS =
 
+#if GTK_CHECK_VERSION (3, 20, 0)
+#define CSS_SLIM_TABS                           \
+    "#" NOTEBOOK_NAME " tab {\n"                \
+    "  min-height: 0;\n"                        \
+    "  font-weight: normal;\n"                  \
+    "  padding: 1px;\n"                         \
+    "  margin: 0;\n"                            \
+    "}\n"                                       \
+    "#" NOTEBOOK_NAME " tab button {\n"         \
+    "  min-height: 0;\n"                        \
+    "  min-width: 0;\n"                         \
+    "  padding: 1px;\n"                         \
+    "  margin: 0;\n"                            \
+    "}\n"                                       \
+    "#" NOTEBOOK_NAME " button {\n"             \
+    "  min-height: 0;\n"                        \
+    "  min-width: 0;\n"                         \
+    "  padding: 1px;\n"                         \
+    "}\n"
+#else
+#define CSS_SLIM_TABS                           \
+    "#" NOTEBOOK_NAME " tab {\n"                \
+    "  font-weight: normal;\n"                  \
+    "  padding: 1px;\n"                         \
+    "  margin: 0;\n"                            \
+    "}\n"                                       \
+    "#" NOTEBOOK_NAME " tab button {\n"         \
+    "  padding: 1px;\n"                         \
+    "  margin: 0;\n"                            \
+    "}\n"                                       \
+    "#" NOTEBOOK_NAME " button {\n"             \
+    "  padding: 1px;\n"                         \
+    "}\n"
+#endif
 
+#define CSS_ACTIVE_TAB                          \
+    "#" NOTEBOOK_NAME " tab:active {\n"         \
+    "  background-color: %s;\n"                 \
+    "}\n"
 
 static void         terminal_window_finalize                      (GObject                *object);
 static gboolean     terminal_window_delete_event                  (GtkWidget              *widget,
@@ -123,7 +138,7 @@ static gboolean     terminal_window_accel_activate                (GtkAccelGroup
                                                                    GdkModifierType         accel_mods,
                                                                    TerminalWindow         *window);
 static void         terminal_window_update_actions                (TerminalWindow         *window);
-static void         terminal_window_update_slim_tabs              (TerminalWindow         *window);
+static void         terminal_window_update_tab_style              (TerminalWindow         *window);
 static void         terminal_window_notebook_page_switched        (GtkNotebook            *notebook,
                                                                    GtkWidget              *page,
                                                                    guint                   page_num,
@@ -487,7 +502,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
   /* set notebook tabs style */
   gtk_widget_set_name (window->priv->notebook, NOTEBOOK_NAME);
-  terminal_window_update_slim_tabs (window);
+  terminal_window_update_tab_style (window);
 
   /* signals */
   g_signal_connect (G_OBJECT (window->priv->notebook), "switch-page",
@@ -943,8 +958,10 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 
 static void
-terminal_window_update_slim_tabs (TerminalWindow *window)
+terminal_window_update_tab_style (TerminalWindow *window)
 {
+  static gchar *tab_style = NULL;
+
   GdkScreen      *screen = gtk_window_get_screen (GTK_WINDOW (window));
   GtkCssProvider *provider;
   gboolean        slim_tabs;
@@ -952,15 +969,37 @@ terminal_window_update_slim_tabs (TerminalWindow *window)
   g_object_get (G_OBJECT (window->priv->preferences),
                 "misc-slim-tabs", &slim_tabs,
                 NULL);
-  if (slim_tabs)
-    {
-      provider = gtk_css_provider_new ();
-      gtk_style_context_add_provider_for_screen (screen,
-                                                 GTK_STYLE_PROVIDER (provider),
-                                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-      gtk_css_provider_load_from_data (provider, CSS_SLIM_TABS, -1, NULL);
-      g_object_unref (provider);
-    }
+
+
+  if (tab_style == NULL)
+  {
+    TerminalPreferences *preferences;
+    gchar *selected_color_spec;
+    GdkRGBA selected_color;
+
+    preferences = terminal_preferences_get();
+    g_object_get (G_OBJECT (preferences),
+                  "color-background", &selected_color_spec,
+                  NULL);
+    gdk_rgba_parse(&selected_color, selected_color_spec);
+
+    // sometimes the color spec is saved as integers ("#124151515125")
+    // convert from an rgba string to a css3-recognized rgba string
+    g_free (selected_color_spec);
+    selected_color_spec = gdk_rgba_to_string(&selected_color);
+
+    tab_style = g_strdup_printf(slim_tabs ? (CSS_SLIM_TABS CSS_ACTIVE_TAB) : (CSS_ACTIVE_TAB),
+                                selected_color_spec);
+
+    g_free (selected_color_spec);
+  }
+
+  provider = gtk_css_provider_new ();
+  gtk_style_context_add_provider_for_screen (screen,
+                                             GTK_STYLE_PROVIDER (provider),
+                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  gtk_css_provider_load_from_data (provider, tab_style, -1, NULL);
+  g_object_unref (provider);
 }
 
 
@@ -977,6 +1016,11 @@ terminal_window_notebook_page_switched (GtkNotebook     *notebook,
   /* get the new active page */
   active = TERMINAL_SCREEN (page);
 
+  if (active != NULL) {
+    if (window != NULL && window->priv->active != NULL)
+      terminal_screen_unset_active_style(window->priv->active);
+    terminal_screen_set_active_style(active);
+  }
   terminal_return_if_fail (window == NULL);
   terminal_return_if_fail (active == NULL || TERMINAL_IS_SCREEN (active));
 

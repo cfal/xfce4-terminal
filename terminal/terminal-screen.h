@@ -119,6 +119,8 @@ void         terminal_screen_set_input_enabled            (TerminalScreen *scree
 void         terminal_screen_save_contents                (TerminalScreen *screen,
                                                            GOutputStream  *stream,
                                                            GError         *error);
+void         terminal_screen_unset_active_style           (TerminalScreen *screen);
+void         terminal_screen_set_active_style             (TerminalScreen *screen);
 
 G_END_DECLS
 
